@@ -1,24 +1,62 @@
-// Embedding service module
-// TODO: Implement embedding service
+use anyhow::{anyhow, Result};
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
+use crate::models::ProviderConfig;
 
-pub struct EmbeddingService {
-    client: crate::services::ai_client::AiClient,
+#[derive(Debug, Serialize)]
+struct EmbeddingRequest {
+    model: String,
+    input: String,
 }
 
-impl EmbeddingService {
-    pub fn new(client: crate::services::ai_client::AiClient) -> Self {
-        Self { client }
+#[derive(Debug, Deserialize)]
+struct EmbeddingResponse {
+    data: Vec<EmbeddingData>,
+}
+
+#[derive(Debug, Deserialize)]
+struct EmbeddingData {
+    embedding: Vec<f32>,
+}
+
+/// Get embedding for a single text
+pub async fn get_embedding(provider: &ProviderConfig, text: &str) -> Result<Vec<f32>> {
+    let client = Client::new();
+    let url = format!("{}/embeddings", provider.base_url);
+
+    let request = EmbeddingRequest {
+        model: provider.embedding_model.clone(),
+        input: text.to_string(),
+    };
+
+    let response = client
+        .post(&url)
+        .header("Authorization", format!("Bearer {}", provider.api_key))
+        .header("Content-Type", "application/json")
+        .json(&request)
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        let error_text = response.text().await?;
+        return Err(anyhow!("Embedding API error: {}", error_text));
     }
 
-    pub async fn embed_text(&self, text: &str) -> Result<Vec<f32>, anyhow::Error> {
-        self.client.embed(text).await
-    }
+    let embedding_response: EmbeddingResponse = response.json().await?;
 
-    pub async fn embed_batch(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>, anyhow::Error> {
-        let mut embeddings = Vec::new();
-        for text in texts {
-            embeddings.push(self.embed_text(text).await?);
-        }
-        Ok(embeddings)
+    embedding_response
+        .data
+        .first()
+        .map(|d| d.embedding.clone())
+        .ok_or_else(|| anyhow!("No embedding returned"))
+}
+
+/// Get embeddings for multiple texts
+pub async fn get_embeddings(provider: &ProviderConfig, texts: &[String]) -> Result<Vec<Vec<f32>>> {
+    let mut results = Vec::new();
+    for text in texts {
+        let embedding = get_embedding(provider, text).await?;
+        results.push(embedding);
     }
+    Ok(results)
 }

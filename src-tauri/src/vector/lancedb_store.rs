@@ -1,6 +1,7 @@
 use anyhow::Result;
 
 /// LanceDB vector store for document embeddings
+/// Note: LanceDB requires protoc to be installed. This is a placeholder implementation.
 pub struct VectorStore {
     db_path: String,
 }
@@ -14,7 +15,7 @@ impl VectorStore {
 
     /// Initialize the vector store
     pub async fn init(&self) -> Result<()> {
-        // TODO: Initialize LanceDB
+        // TODO: Initialize LanceDB when protoc is available
         println!("Vector store would be initialized at: {}", self.db_path);
         Ok(())
     }
