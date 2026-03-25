@@ -1,65 +1,42 @@
-use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::Manager;
+use crate::models::ProviderConfig;
+use crate::services::ai_client::test_connection;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProviderConfig {
-    pub id: String,
-    pub name: String,
-    pub api_key: String,
-    pub base_url: String,
-    pub model: String,
-    pub enabled: bool,
+#[tauri::command]
+pub async fn get_providers() -> Vec<ProviderConfig> {
+    ProviderConfig::presets()
 }
 
 #[tauri::command]
-pub async fn get_providers() -> Result<Vec<ProviderConfig>, String> {
-    // TODO: Implement loading from storage
-    Ok(vec![
-        ProviderConfig {
-            id: "deepseek".to_string(),
-            name: "DeepSeek".to_string(),
-            api_key: String::new(),
-            base_url: "https://api.deepseek.com".to_string(),
-            model: "deepseek-chat".to_string(),
-            enabled: false,
-        },
-        ProviderConfig {
-            id: "moonshot".to_string(),
-            name: "Moonshot".to_string(),
-            api_key: String::new(),
-            base_url: "https://api.moonshot.cn".to_string(),
-            model: "moonshot-v1-8k".to_string(),
-            enabled: false,
-        },
-        ProviderConfig {
-            id: "zhipu".to_string(),
-            name: "智谱".to_string(),
-            api_key: String::new(),
-            base_url: "https://open.bigmodel.cn".to_string(),
-            model: "glm-4".to_string(),
-            enabled: false,
-        },
-        ProviderConfig {
-            id: "bailian".to_string(),
-            name: "百炼".to_string(),
-            api_key: String::new(),
-            base_url: "https://dashscope.aliyuncs.com".to_string(),
-            model: "qwen-turbo".to_string(),
-            enabled: false,
-        },
-    ])
-}
+pub async fn save_provider(
+    app_handle: tauri::AppHandle,
+    provider: ProviderConfig,
+) -> Result<(), String> {
+    let config_dir = app_handle.path().app_config_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
 
-#[tauri::command]
-pub async fn save_provider(provider: ProviderConfig) -> Result<(), String> {
-    // TODO: Implement saving to storage
-    println!("Saving provider: {:?}", provider);
+    let config_path = config_dir.join("providers.json");
+    let mut providers: Vec<ProviderConfig> = if config_path.exists() {
+        let content = std::fs::read_to_string(&config_path).map_err(|e| e.to_string())?;
+        serde_json::from_str(&content).unwrap_or_default()
+    } else {
+        ProviderConfig::presets()
+    };
+
+    // 更新或添加 provider
+    if let Some(existing) = providers.iter_mut().find(|p| p.id == provider.id) {
+        *existing = provider;
+    } else {
+        providers.push(provider);
+    }
+
+    let content = serde_json::to_string_pretty(&providers).map_err(|e| e.to_string())?;
+    std::fs::write(&config_path, content).map_err(|e| e.to_string())?;
+
     Ok(())
 }
 
 #[tauri::command]
-pub async fn test_provider(provider_id: String) -> Result<bool, String> {
-    // TODO: Implement testing connection
-    println!("Testing provider: {}", provider_id);
-    Ok(true)
+pub async fn test_provider(provider: ProviderConfig) -> Result<String, String> {
+    test_connection(&provider).await.map_err(|e| e.to_string())
 }
