@@ -124,10 +124,10 @@ sqlx::query(
 .await?;
 ```
 
-添加任务相关函数：
+添加任务相关函数（与计划 A 风格保持一致，添加 `_db` 后缀）：
 
 ```rust
-pub async fn list_tasks(pool: &SqlitePool) -> Result<Vec<Task>> {
+pub async fn list_tasks_db(pool: &SqlitePool) -> Result<Vec<Task>> {
     let rows = sqlx::query_as::<_, Task>(
         "SELECT id, document_id, status, progress, output_path, error, created_at, completed_at FROM tasks ORDER BY created_at DESC"
     )
@@ -136,7 +136,7 @@ pub async fn list_tasks(pool: &SqlitePool) -> Result<Vec<Task>> {
     Ok(rows)
 }
 
-pub async fn create_task(pool: &SqlitePool, doc_id: &str) -> Result<Task> {
+pub async fn create_task_db(pool: &SqlitePool, doc_id: &str) -> Result<Task> {
     let id = uuid::Uuid::new_v4().to_string();
     let created_at = chrono::Utc::now();
 
@@ -161,7 +161,7 @@ pub async fn create_task(pool: &SqlitePool, doc_id: &str) -> Result<Task> {
     })
 }
 
-pub async fn update_task_status(
+pub async fn update_task_status_db(
     pool: &SqlitePool,
     id: &str,
     status: &str,
@@ -176,7 +176,7 @@ pub async fn update_task_status(
     Ok(())
 }
 
-pub async fn complete_task(
+pub async fn complete_task_db(
     pool: &SqlitePool,
     id: &str,
     output_path: &str,
@@ -193,7 +193,7 @@ pub async fn complete_task(
     Ok(())
 }
 
-pub async fn fail_task(pool: &SqlitePool, id: &str, error: &str) -> Result<()> {
+pub async fn fail_task_db(pool: &SqlitePool, id: &str, error: &str) -> Result<()> {
     sqlx::query("UPDATE tasks SET status = 'failed', error = ? WHERE id = ?")
         .bind(error)
         .bind(id)
@@ -228,8 +228,8 @@ use crate::models::ProviderConfig;
 use super::ai_client::chat;
 use super::ai_client::Message;
 
-/// 术语表：中文 -> 英文映射
-type TermGlossary = Arc<RwLock<HashMap<String, String>>>;
+/// 术语表：中文 -> 英文映射（共享状态）
+pub type TermGlossary = Arc<RwLock<HashMap<String, String>>>;
 
 pub struct Translator {
     provider: ProviderConfig,
@@ -244,6 +244,16 @@ impl Translator {
         }
     }
 
+    /// 创建带有共享术语表的实例（用于并发翻译）
+    pub fn with_glossary(provider: ProviderConfig, glossary: TermGlossary) -> Self {
+        Self { provider, glossary }
+    }
+
+    /// 获取术语表引用（用于共享）
+    pub fn glossary(&self) -> TermGlossary {
+        self.glossary.clone()
+    }
+
     /// 翻译单个段落
     pub async fn translate_paragraph(&self, text: &str) -> Result<String> {
         let glossary = self.glossary.read().await;
@@ -256,6 +266,7 @@ impl Translator {
                 .collect();
             format!("\n\n术语参考：\n{}", terms.join("\n"))
         };
+        drop(glossary); // 释放读锁
 
         let system_prompt = format!(
             "你是一个专业的中英翻译助手。请将以下中文翻译成英文。\
@@ -277,13 +288,13 @@ impl Translator {
 
         let result = chat(&self.provider, messages).await?;
 
-        // 更新术语表（简化实现：提取可能的术语对）
+        // 更新术语表
         self.update_glossary(text, &result).await;
 
         Ok(result)
     }
 
-    /// 批量翻译段落（并发）
+    /// 批量翻译段落（并发，共享术语表）
     pub async fn translate_paragraphs(
         &self,
         paragraphs: &[String],
@@ -292,12 +303,46 @@ impl Translator {
         use tokio::sync::Semaphore;
 
         let semaphore = Arc::new(Semaphore::new(concurrency));
+        let glossary = self.glossary.clone(); // 共享术语表
+        let provider = self.provider.clone();
         let mut handles = vec![];
 
         for para in paragraphs {
             let permit = semaphore.clone().acquire_owned().await?;
-            let translator = Self::new(self.provider.clone());
+            let glossary_clone = glossary.clone();
+            let provider_clone = provider.clone();
             let para = para.clone();
+
+            // 使用共享术语表创建翻译器
+            let translator = Self::with_glossary(provider_clone, glossary_clone);
+
+            let handle = tokio::spawn(async move {
+                let _permit = permit;
+                translator.translate_paragraph(&para).await
+            });
+            handles.push(handle);
+        }
+
+        let mut results = vec![];
+        for handle in handles {
+            results.push(handle.await??);
+        }
+
+        Ok(results)
+    }
+
+    async fn update_glossary(&self, chinese: &str, english: &str) {
+        // 简化实现：提取可能的术语对
+        // 可以后续扩展为更智能的术语提取
+        let _ = (chinese, english);
+    }
+
+    pub async fn add_term(&self, chinese: String, english: String) {
+        let mut glossary = self.glossary.write().await;
+        glossary.insert(chinese, english);
+    }
+}
+```
 
             let handle = tokio::spawn(async move {
                 let _permit = permit;
@@ -668,6 +713,24 @@ use crate::db::*;
 use crate::models::Document;
 use crate::services::{ai_client, embedding, document_processor::DocumentProcessor, VectorStore};
 
+/// 从配置文件加载活动的提供商（与 tasks.rs 共享）
+fn load_active_provider(app_handle: &tauri::AppHandle) -> Result<crate::models::ProviderConfig, String> {
+    let config_dir = app_handle.path().app_config_dir().map_err(|e| e.to_string())?;
+    let config_path = config_dir.join("providers.json");
+
+    if config_path.exists() {
+        let content = std::fs::read_to_string(&config_path).map_err(|e| e.to_string())?;
+        let providers: Vec<crate::models::ProviderConfig> = serde_json::from_str(&content)
+            .map_err(|e| e.to_string())?;
+
+        if let Some(provider) = providers.into_iter().find(|p| p.is_active && !p.api_key.is_empty()) {
+            return Ok(provider);
+        }
+    }
+
+    Err("No active provider configured. Please configure API key in Settings.".to_string())
+}
+
 #[tauri::command]
 pub async fn chat(
     app_handle: tauri::AppHandle,
@@ -676,10 +739,8 @@ pub async fn chat(
 ) -> Result<String, String> {
     let pool = app_handle.state::<SqlitePool>();
 
-    // 获取活动提供商
-    let provider = crate::models::ProviderConfig::presets().into_iter()
-        .find(|p| p.is_active)
-        .ok_or_else(|| "No active provider".to_string())?;
+    // 从配置文件加载活动提供商
+    let provider = load_active_provider(&app_handle)?;
 
     // 有选择文档 -> RAG
     if !document_ids.is_empty() {
@@ -769,10 +830,8 @@ pub async fn vectorize_document(
         return Err("文档无文本内容".to_string());
     }
 
-    // 获取提供商
-    let provider = crate::models::ProviderConfig::presets().into_iter()
-        .find(|p| p.is_active)
-        .ok_or_else(|| "No active provider".to_string())?;
+    // 从配置文件加载提供商
+    let provider = load_active_provider(&app_handle)?;
 
     // 获取嵌入
     let embeddings = embedding::get_embeddings(&provider, &paragraphs)
