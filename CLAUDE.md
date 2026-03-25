@@ -29,15 +29,21 @@
 
 ## 实现状态
 
-- [ ] 计划 A：基础架构 + 设置 + 文档管理
+- [x] 计划 A：基础架构 + 设置 + 文档管理 ✅
 - [ ] 计划 B：toPdf 任务 + 聊天模块
 
 ## 下一步
 
-使用子代理驱动方式执行计划 A：
+执行计划 B：
 
 ```
-使用 subagent-driven-development 技能，执行 docs/superpowers/plans/2026-03-25-doctranslate-plan-a.md
+使用 subagent-driven-development 技能，执行 docs/superpowers/plans/2026-03-25-doctranslate-plan-b.md
+```
+
+或者运行应用进行测试：
+
+```bash
+npm run tauri dev
 ```
 
 ## 关键配置
