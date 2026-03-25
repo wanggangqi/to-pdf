@@ -1,77 +1,122 @@
 <template>
-  <div class="provider-config">
-    <el-card v-for="provider in providers" :key="provider.id" class="provider-card">
-      <template #header>
-        <div class="card-header">
-          <span>{{ provider.name }}</span>
-          <el-switch v-model="provider.enabled" />
-        </div>
-      </template>
-      <el-form label-width="100px">
-        <el-form-item label="API Key">
-          <el-input v-model="provider.apiKey" type="password" show-password />
-        </el-form-item>
-        <el-form-item label="Base URL">
-          <el-input v-model="provider.baseUrl" />
-        </el-form-item>
-        <el-form-item label="模型">
-          <el-input v-model="provider.model" />
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="handleTest(provider.id)">
-            测试连接
-          </el-button>
-          <el-button @click="handleSave(provider)">保存</el-button>
-        </el-form-item>
-      </el-form>
-    </el-card>
-  </div>
+  <el-form :model="form" label-width="120px" class="provider-form">
+    <el-form-item label="API Key">
+      <el-input
+        v-model="form.apiKey"
+        type="password"
+        show-password
+        placeholder="请输入 API Key"
+      />
+    </el-form-item>
+
+    <el-form-item label="Base URL">
+      <el-input v-model="form.baseUrl" placeholder="API 地址" />
+    </el-form-item>
+
+    <el-form-item label="聊天模型">
+      <el-input v-model="form.model" placeholder="模型名称" />
+    </el-form-item>
+
+    <el-form-item label="嵌入模型">
+      <el-input v-model="form.embeddingModel" placeholder="嵌入模型名称" />
+    </el-form-item>
+
+    <el-form-item label="启用">
+      <el-switch v-model="form.isActive" />
+    </el-form-item>
+
+    <el-form-item>
+      <el-button @click="handleTest" :loading="testing">
+        测试连接
+      </el-button>
+      <el-button type="primary" @click="handleSave" :loading="saving">
+        保存配置
+      </el-button>
+    </el-form-item>
+  </el-form>
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, reactive, watch } from "vue";
+import { ElMessage } from "element-plus";
+import { useSettingsStore } from "@/stores/settings";
+import type { ProviderConfig } from "@/types";
 
-interface Provider {
-  id: string;
-  name: string;
-  apiKey: string;
-  baseUrl: string;
-  model: string;
-  enabled: boolean;
+const props = defineProps<{
+  provider: ProviderConfig;
+}>();
+
+const settingsStore = useSettingsStore();
+
+const form = reactive({
+  apiKey: props.provider.apiKey,
+  baseUrl: props.provider.baseUrl,
+  model: props.provider.model,
+  embeddingModel: props.provider.embeddingModel,
+  isActive: props.provider.isActive,
+});
+
+const testing = ref(false);
+const saving = ref(false);
+
+watch(
+  () => props.provider,
+  (newVal) => {
+    form.apiKey = newVal.apiKey;
+    form.baseUrl = newVal.baseUrl;
+    form.model = newVal.model;
+    form.embeddingModel = newVal.embeddingModel;
+    form.isActive = newVal.isActive;
+  }
+);
+
+async function handleTest() {
+  if (!form.apiKey) {
+    ElMessage.warning("请先输入 API Key");
+    return;
+  }
+
+  testing.value = true;
+  try {
+    const result = await settingsStore.testProvider({
+      ...props.provider,
+      apiKey: form.apiKey,
+      baseUrl: form.baseUrl,
+      model: form.model,
+      embeddingModel: form.embeddingModel,
+      isActive: form.isActive,
+    });
+    ElMessage.success(`连接成功: ${result}`);
+  } catch (error: any) {
+    ElMessage.error(`连接失败: ${error}`);
+  } finally {
+    testing.value = false;
+  }
 }
 
-const providers = ref<Provider[]>([
-  { id: "deepseek", name: "DeepSeek", apiKey: "", baseUrl: "https://api.deepseek.com", model: "deepseek-chat", enabled: false },
-  { id: "moonshot", name: "Moonshot", apiKey: "", baseUrl: "https://api.moonshot.cn", model: "moonshot-v1-8k", enabled: false },
-  { id: "zhipu", name: "智谱", apiKey: "", baseUrl: "https://open.bigmodel.cn", model: "glm-4", enabled: false },
-  { id: "bailian", name: "百炼", apiKey: "", baseUrl: "https://dashscope.aliyuncs.com", model: "qwen-turbo", enabled: false },
-]);
-
-function handleTest(providerId: string) {
-  console.log("Testing provider:", providerId);
-  // TODO: Implement with Tauri backend
-}
-
-function handleSave(provider: Provider) {
-  console.log("Saving provider:", provider);
-  // TODO: Implement with Tauri backend
+async function handleSave() {
+  saving.value = true;
+  try {
+    await settingsStore.saveProvider({
+      ...props.provider,
+      apiKey: form.apiKey,
+      baseUrl: form.baseUrl,
+      model: form.model,
+      embeddingModel: form.embeddingModel,
+      isActive: form.isActive,
+    });
+    ElMessage.success("保存成功");
+  } catch (error: any) {
+    ElMessage.error(`保存失败: ${error}`);
+  } finally {
+    saving.value = false;
+  }
 }
 </script>
 
 <style scoped>
-.provider-config {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.provider-card {
-  max-width: 600px;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.provider-form {
+  max-width: 500px;
+  margin-top: 20px;
 }
 </style>

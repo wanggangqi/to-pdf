@@ -1,44 +1,60 @@
 import { defineStore } from "pinia";
-import { ref } from "vue";
+import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
+import type { Document } from "@/types";
 
-export interface Document {
-  id: string;
-  filename: string;
-  fileType: "pdf" | "docx";
-  fileSize: number;
-  createdAt: string;
-  status: "pending" | "processing" | "completed" | "error";
-}
+export const useDocumentsStore = defineStore("documents", {
+  state: () => ({
+    documents: [] as Document[],
+    loading: false,
+    selectedIds: [] as string[],
+  }),
 
-export const useDocumentsStore = defineStore("documents", () => {
-  const documents = ref<Document[]>([]);
-  const loading = ref(false);
+  getters: {
+    selectedDocuments: (state) =>
+      state.documents.filter((d) => state.selectedIds.includes(d.id)),
+  },
 
-  async function loadDocuments() {
-    // TODO: Implement loading from Tauri backend
-    loading.value = true;
-    try {
-      // Placeholder for Tauri invoke
-    } finally {
-      loading.value = false;
-    }
-  }
+  actions: {
+    async loadDocuments() {
+      this.loading = true;
+      try {
+        this.documents = await invoke<Document[]>("list_documents");
+      } finally {
+        this.loading = false;
+      }
+    },
 
-  async function uploadDocument(file: File) {
-    // TODO: Implement upload via Tauri backend
-    console.log("Uploading document:", file.name);
-  }
+    async uploadDocument() {
+      const selected = await open({
+        multiple: false,
+        filters: [
+          { name: "Documents", extensions: ["pdf", "doc", "docx"] },
+        ],
+      });
 
-  async function deleteDocument(id: string) {
-    // TODO: Implement delete via Tauri backend
-    console.log("Deleting document:", id);
-  }
+      if (selected) {
+        await invoke<Document>("upload_document", { filePath: selected });
+        await this.loadDocuments();
+      }
+    },
 
-  return {
-    documents,
-    loading,
-    loadDocuments,
-    uploadDocument,
-    deleteDocument,
-  };
+    async deleteDocument(id: string) {
+      await invoke("delete_document", { id });
+      await this.loadDocuments();
+    },
+
+    toggleSelection(id: string) {
+      const index = this.selectedIds.indexOf(id);
+      if (index > -1) {
+        this.selectedIds.splice(index, 1);
+      } else {
+        this.selectedIds.push(id);
+      }
+    },
+
+    clearSelection() {
+      this.selectedIds = [];
+    },
+  },
 });
