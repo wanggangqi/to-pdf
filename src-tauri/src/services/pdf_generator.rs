@@ -1,15 +1,55 @@
 use anyhow::Result;
 use printpdf::*;
 use std::fs::File;
-use std::io::BufWriter;
+use std::io::Read;
 
 /// PDF 生成器：用于创建双语对照 PDF 文档
 pub struct PdfGenerator;
 
 impl PdfGenerator {
+    /// 加载中文字体
+    /// 尝试加载系统中的中文字体，按优先级尝试
+    fn load_cjk_font_bytes() -> Result<Vec<u8>> {
+        // Windows 系统中文字体路径（按优先级排序）
+        let font_paths = [
+            "C:\\Windows\\Fonts\\msyh.ttc",    // 微软雅黑
+            "C:\\Windows\\Fonts\\msyhbd.ttc",   // 微软雅黑粗体
+            "C:\\Windows\\Fonts\\simhei.ttf",   // 黑体
+            "C:\\Windows\\Fonts\\simsun.ttc",   // 宋体
+            "C:\\Windows\\Fonts\\simkai.ttf",   // 楷体
+        ];
+
+        for path in &font_paths {
+            if std::path::Path::new(path).exists() {
+                match File::open(path) {
+                    Ok(mut font_file) => {
+                        let mut font_bytes = Vec::new();
+                        match font_file.read_to_end(&mut font_bytes) {
+                            Ok(_) => {
+                                println!("成功加载中文字体: {}", path);
+                                return Ok(font_bytes);
+                            }
+                            Err(e) => {
+                                println!("读取字体文件 {} 失败: {}, 尝试下一个", path, e);
+                                continue;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        println!("无法打开字体文件 {}: {}", path, e);
+                        continue;
+                    }
+                }
+            }
+        }
+
+        Err(anyhow::anyhow!(
+            "未找到可用的中文字体。请确保系统安装了微软雅黑、黑体、宋体或楷体字体"
+        ))
+    }
+
     /// 生成双语对照 PDF
     /// 段落格式：中文段落后紧跟英文翻译
-    /// 注意：中文支持需要嵌入字体文件，这里使用简化的实现方案
     pub fn generate_bilingual_pdf(
         output_path: &str,
         paragraphs: &[(String, String)], // (中文, 英文)
@@ -26,11 +66,28 @@ impl PdfGenerator {
             "Layer 1",
         );
 
-        // 使用内置 Helvetica 字体（用于英文）
-        let font = doc.add_builtin_font(BuiltinFont::Helvetica)?;
+        // 尝试加载中文字体，失败则使用内置字体
+        let font = match Self::load_cjk_font_bytes() {
+            Ok(font_bytes) => {
+                // 使用 Cursor 实现 Read trait
+                let cursor = std::io::Cursor::new(font_bytes);
+                match doc.add_external_font(cursor) {
+                    Ok(f) => f,
+                    Err(e) => {
+                        println!("添加外部字体失败: {}, 使用内置 Helvetica 字体", e);
+                        doc.add_builtin_font(BuiltinFont::Helvetica)?
+                    }
+                }
+            }
+            Err(e) => {
+                println!("加载中文字体失败: {}, 使用内置 Helvetica 字体", e);
+                doc.add_builtin_font(BuiltinFont::Helvetica)?
+            }
+        };
 
-        // 获取当前图层用于绘制
-        let current_layer = doc.get_page(page1).get_layer(layer1);
+        // 跟踪当前页面和图层索引
+        let mut current_page = page1;
+        let mut current_layer_id = layer1;
 
         // 字体大小和行高
         let font_size = 10.0;
@@ -40,45 +97,68 @@ impl PdfGenerator {
         let mut y = height - margin;
 
         for (chinese, english) in paragraphs {
-            // 检查是否需要新页（预留 40mm 空间）
-            if y < margin + Mm(40.0) {
-                // 创建新页面
-                let (_new_page, _new_layer) = doc.add_page(width, height, "Layer 1");
-                y = height - margin;
-            }
-
-            // 中文段落 - 使用内置字体（注意：可能无法正确显示中文）
-            // 实际项目中需要嵌入中文字体
+            // 中文段落换行处理
             let chinese_lines = Self::wrap_text(chinese, 40);
-            for line in &chinese_lines {
-                current_layer.use_text(line, font_size, margin, y, &font);
-                y -= Mm(line_height);
-            }
-            y -= Mm(5.0); // 段落间距
-
-            // 英文段落
             let english_lines = Self::wrap_text(english, 60);
-            for line in &english_lines {
+
+            // 计算当前段落需要的总高度
+            let total_lines = chinese_lines.len() + english_lines.len();
+            let paragraph_height = Mm(total_lines as f32 * line_height + 5.0 + 10.0);
+
+            // 检查是否需要新页
+            if y < margin + paragraph_height {
+                // 如果剩余空间不足以放下整个段落，创建新页面
+                if y < margin + Mm(40.0) {
+                    let (new_page, new_layer) = doc.add_page(width, height, "Layer 1");
+                    current_page = new_page;
+                    current_layer_id = new_layer;
+                    y = height - margin;
+                }
+            }
+
+            // 写入中文段落
+            for line in &chinese_lines {
+                // 检查是否需要换页
+                if y < margin + Mm(10.0) {
+                    let (new_page, new_layer) = doc.add_page(width, height, "Layer 1");
+                    current_page = new_page;
+                    current_layer_id = new_layer;
+                    y = height - margin;
+                }
+
+                // 获取当前图层用于绘制（关键修复：每次绘制前获取正确的图层）
+                let current_layer = doc.get_page(current_page).get_layer(current_layer_id);
                 current_layer.use_text(line, font_size, margin, y, &font);
                 y -= Mm(line_height);
             }
-            y -= Mm(10.0); // 段落之间的额外间距
+
+            // 中英文段落间距
+            y -= Mm(5.0);
+
+            // 写入英文段落
+            for line in &english_lines {
+                // 检查是否需要换页
+                if y < margin + Mm(10.0) {
+                    let (new_page, new_layer) = doc.add_page(width, height, "Layer 1");
+                    current_page = new_page;
+                    current_layer_id = new_layer;
+                    y = height - margin;
+                }
+
+                // 获取当前图层用于绘制
+                let current_layer = doc.get_page(current_page).get_layer(current_layer_id);
+                current_layer.use_text(line, font_size, margin, y, &font);
+                y -= Mm(line_height);
+            }
+
+            // 段落之间的额外间距
+            y -= Mm(10.0);
         }
 
         // 保存文档
-        doc.save(&mut BufWriter::new(File::create(output_path)?))?;
+        doc.save(&mut std::io::BufWriter::new(File::create(output_path)?))?;
 
         Ok(())
-    }
-
-    /// 估算文本所需行数
-    #[allow(dead_code)]
-    fn estimate_lines(text: &str, chars_per_line: usize) -> usize {
-        let char_count = text.chars().count();
-        if char_count == 0 {
-            return 0;
-        }
-        (char_count + chars_per_line - 1) / chars_per_line
     }
 
     /// 文本换行处理
@@ -128,18 +208,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_estimate_lines() {
-        assert_eq!(PdfGenerator::estimate_lines("", 10), 0);
-        assert_eq!(PdfGenerator::estimate_lines("hello", 10), 1);
-        assert_eq!(PdfGenerator::estimate_lines("hello world test", 10), 2);
-    }
-
-    #[test]
     fn test_wrap_text() {
         let text = "这是一段测试文本";
         let lines = PdfGenerator::wrap_text(text, 4);
         assert_eq!(lines.len(), 2);
         assert_eq!(lines[0], "这是一段");
         assert_eq!(lines[1], "测试文本");
+    }
+
+    #[test]
+    fn test_wrap_text_with_newline() {
+        let text = "第一行\n第二行";
+        let lines = PdfGenerator::wrap_text(text, 10);
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0], "第一行");
+        assert_eq!(lines[1], "第二行");
+    }
+
+    #[test]
+    fn test_wrap_text_empty() {
+        let lines = PdfGenerator::wrap_text("", 10);
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0], "");
     }
 }
