@@ -1,44 +1,68 @@
 <template>
   <div class="app-layout">
-    <el-container>
-      <el-aside width="200px">
-        <el-menu router>
-          <el-menu-item index="/">
-            <el-icon><HomeFilled /></el-icon>
-            <span>首页</span>
-          </el-menu-item>
-          <el-menu-item index="/settings">
-            <el-icon><Setting /></el-icon>
-            <span>设置</span>
-          </el-menu-item>
-        </el-menu>
-      </el-aside>
-      <el-main>
-        <slot />
-      </el-main>
-    </el-container>
+    <header class="app-header">
+      <div class="logo">DocTranslate</div>
+      <el-button link @click="$router.push('/settings')">
+        <el-icon><Setting /></el-icon>
+        设置
+      </el-button>
+    </header>
+
+    <div class="app-body">
+      <aside class="sidebar">
+        <slot name="sidebar" />
+      </aside>
+
+      <main class="content">
+        <slot name="content" />
+      </main>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { HomeFilled, Setting } from "@element-plus/icons-vue";
+import { Setting } from "@element-plus/icons-vue";
 </script>
 
 <style scoped>
 .app-layout {
+  display: flex;
+  flex-direction: column;
   height: 100%;
 }
 
-.el-container {
-  height: 100%;
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 16px;
+  height: 50px;
+  border-bottom: 1px solid var(--el-border-color);
+  background: var(--el-bg-color);
 }
 
-.el-aside {
-  background-color: #f5f7fa;
-  border-right: 1px solid #e4e7ed;
+.logo {
+  font-size: 18px;
+  font-weight: 600;
 }
 
-.el-menu {
-  border-right: none;
+.app-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.sidebar {
+  width: 280px;
+  border-right: 1px solid var(--el-border-color);
+  background: var(--el-bg-color-page);
+  display: flex;
+  flex-direction: column;
+}
+
+.content {
+  flex: 1;
+  overflow: auto;
+  padding: 20px;
 }
 </style>

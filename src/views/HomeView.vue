@@ -1,40 +1,50 @@
 <template>
-  <div class="home-view">
-    <h1>DocTranslate</h1>
-    <p>文档翻译与智能问答</p>
-    <div class="actions">
-      <el-button type="primary" @click="$router.push('/settings')">
-        设置
-      </el-button>
-    </div>
-  </div>
+  <AppLayout>
+    <template #sidebar>
+      <DocumentList @refresh="handleRefresh" />
+    </template>
+
+    <template #content>
+      <div class="home-content">
+        <el-tabs v-model="activeTab">
+          <el-tab-pane label="toPdf 任务" name="tasks">
+            <div class="placeholder">
+              <el-empty description="任务模块将在计划 B 中实现" />
+            </div>
+          </el-tab-pane>
+
+          <el-tab-pane label="聊天" name="chat">
+            <div class="placeholder">
+              <el-empty description="聊天模块将在计划 B 中实现" />
+            </div>
+          </el-tab-pane>
+        </el-tabs>
+      </div>
+    </template>
+  </AppLayout>
 </template>
 
 <script setup lang="ts">
-// Home view placeholder
+import { ref } from "vue";
+import AppLayout from "@/components/layout/AppLayout.vue";
+import DocumentList from "@/components/documents/DocumentList.vue";
+
+const activeTab = ref("tasks");
+
+function handleRefresh() {
+  // 刷新内容区域
+}
 </script>
 
 <style scoped>
-.home-view {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+.home-content {
   height: 100%;
 }
 
-.home-view h1 {
-  font-size: 2rem;
-  margin-bottom: 1rem;
-}
-
-.home-view p {
-  color: #666;
-  margin-bottom: 2rem;
-}
-
-.actions {
+.placeholder {
   display: flex;
-  gap: 1rem;
+  justify-content: center;
+  align-items: center;
+  height: 400px;
 }
 </style>
