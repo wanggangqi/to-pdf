@@ -10,10 +10,10 @@ struct ChatRequest {
     max_tokens: u32,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct Message {
-    role: String,
-    content: String,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Message {
+    pub role: String,
+    pub content: String,
 }
 
 #[derive(Debug, Deserialize)]
