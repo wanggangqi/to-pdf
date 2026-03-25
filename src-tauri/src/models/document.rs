@@ -6,6 +6,7 @@ use sqlx::FromRow;
 pub struct Document {
     pub id: String,
     pub name: String,
+    #[serde(rename = "type")]
     pub doc_type: String, // "word" | "pdf"
     pub size: i64,
     pub path: String,
@@ -16,6 +17,7 @@ pub struct Document {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateDocument {
     pub name: String,
+    #[serde(rename = "type")]
     pub doc_type: String,
     pub size: i64,
     pub path: String,
