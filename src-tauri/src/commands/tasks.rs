@@ -7,7 +7,7 @@ use crate::services::{Translator, PdfGenerator, document_processor::DocumentProc
 #[tauri::command]
 pub async fn list_tasks(app_handle: tauri::AppHandle) -> Result<Vec<Task>, String> {
     let pool = app_handle.state::<SqlitePool>();
-    list_tasks_db(&pool).await.map_err(|e| e.to_string())
+    list_tasks_db(&*pool).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -19,7 +19,7 @@ pub async fn create_task(
     let pool_clone = pool.inner().clone();
 
     // 创建任务
-    let task = create_task_db(&pool, CreateTask { document_id: document_id.clone() })
+    let task = create_task_db(&*pool, CreateTask { document_id: document_id.clone() })
         .await
         .map_err(|e| e.to_string())?;
 
