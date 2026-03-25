@@ -677,7 +677,7 @@ pub async fn init_db(app_handle: &tauri::AppHandle) -> Result<()> {
     Ok(())
 }
 
-pub async fn list_documents(pool: &SqlitePool) -> Result<Vec<Document>> {
+pub async fn list_documents_db(pool: &SqlitePool) -> Result<Vec<Document>> {
     let rows = sqlx::query_as::<_, Document>(
         "SELECT id, name, doc_type as doc_type, size, path, created_at, vectorized FROM documents ORDER BY created_at DESC"
     )
@@ -687,7 +687,7 @@ pub async fn list_documents(pool: &SqlitePool) -> Result<Vec<Document>> {
     Ok(rows)
 }
 
-pub async fn create_document(pool: &SqlitePool, doc: CreateDocument) -> Result<Document> {
+pub async fn create_document_db(pool: &SqlitePool, doc: CreateDocument) -> Result<Document> {
     let id = uuid::Uuid::new_v4().to_string();
     let created_at = chrono::Utc::now();
 
@@ -714,7 +714,7 @@ pub async fn create_document(pool: &SqlitePool, doc: CreateDocument) -> Result<D
     })
 }
 
-pub async fn delete_document(pool: &SqlitePool, id: &str) -> Result<()> {
+pub async fn delete_document_db(pool: &SqlitePool, id: &str) -> Result<()> {
     sqlx::query("DELETE FROM documents WHERE id = ?")
         .bind(id)
         .execute(pool)
@@ -723,7 +723,7 @@ pub async fn delete_document(pool: &SqlitePool, id: &str) -> Result<()> {
     Ok(())
 }
 
-pub async fn update_vectorized(pool: &SqlitePool, id: &str, vectorized: bool) -> Result<()> {
+pub async fn update_vectorized_db(pool: &SqlitePool, id: &str, vectorized: bool) -> Result<()> {
     sqlx::query("UPDATE documents SET vectorized = ? WHERE id = ?")
         .bind(vectorized)
         .bind(id)
@@ -939,13 +939,13 @@ git commit -m "feat: add settings commands and AI client"
 ```rust
 use sqlx::SqlitePool;
 use tauri::Manager;
-use crate::db::{list_documents as db_list_documents, create_document, delete_document as db_delete_document};
+use crate::db::{list_documents_db, create_document_db, delete_document_db};
 use crate::models::{Document, CreateDocument};
 
 #[tauri::command]
 pub async fn list_documents(app_handle: tauri::AppHandle) -> Result<Vec<Document>, String> {
     let pool = app_handle.state::<SqlitePool>();
-    db_list_documents(&pool).await.map_err(|e| e.to_string())
+    list_documents_db(&pool).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -993,7 +993,7 @@ pub async fn upload_document(
         path: dest_path.to_string_lossy().to_string(),
     };
 
-    create_document(&pool, doc).await.map_err(|e| e.to_string())
+    create_document_db(&pool, doc).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1004,14 +1004,14 @@ pub async fn delete_document(
     let pool = app_handle.state::<SqlitePool>();
 
     // 获取文档路径并删除文件
-    let docs = db_list_documents(&pool).await.map_err(|e| e.to_string())?;
+    let docs = list_documents_db(&pool).await.map_err(|e| e.to_string())?;
     if let Some(doc) = docs.iter().find(|d| d.id == id) {
         if std::path::Path::new(&doc.path).exists() {
             std::fs::remove_file(&doc.path).map_err(|e| e.to_string())?;
         }
     }
 
-    db_delete_document(&pool, &id).await.map_err(|e| e.to_string())
+    delete_document_db(&pool, &id).await.map_err(|e| e.to_string())
 }
 ```
 
