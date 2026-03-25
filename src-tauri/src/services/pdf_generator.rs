@@ -9,14 +9,16 @@ pub struct PdfGenerator;
 impl PdfGenerator {
     /// 加载中文字体
     /// 尝试加载系统中的中文字体，按优先级尝试
+    /// 注意：printpdf 不支持 .ttc（TrueType Collection）格式，只支持 .ttf 单字体文件
     fn load_cjk_font_bytes() -> Result<Vec<u8>> {
-        // Windows 系统中文字体路径（按优先级排序）
+        // Windows 系统中文字体路径（只使用 .ttf 格式）
+        // 注意：msyh.ttc、simsun.ttc 是 TrueType Collection 格式，printpdf 不支持
         let font_paths = [
-            "C:\\Windows\\Fonts\\msyh.ttc",    // 微软雅黑
-            "C:\\Windows\\Fonts\\msyhbd.ttc",   // 微软雅黑粗体
-            "C:\\Windows\\Fonts\\simhei.ttf",   // 黑体
-            "C:\\Windows\\Fonts\\simsun.ttc",   // 宋体
+            "C:\\Windows\\Fonts\\simhei.ttf",   // 黑体（.ttf 格式，推荐）
             "C:\\Windows\\Fonts\\simkai.ttf",   // 楷体
+            "C:\\Windows\\Fonts\\STZHONGS.TTF", // 华文中宋
+            "C:\\Windows\\Fonts\\STSONG.TTF",   // 华文宋体
+            "C:\\Windows\\Fonts\\STKAITI.TTF",  // 华文楷体
         ];
 
         for path in &font_paths {
@@ -66,24 +68,11 @@ impl PdfGenerator {
             "Layer 1",
         );
 
-        // 尝试加载中文字体，失败则使用内置字体
-        let font = match Self::load_cjk_font_bytes() {
-            Ok(font_bytes) => {
-                // 使用 Cursor 实现 Read trait
-                let cursor = std::io::Cursor::new(font_bytes);
-                match doc.add_external_font(cursor) {
-                    Ok(f) => f,
-                    Err(e) => {
-                        println!("添加外部字体失败: {}, 使用内置 Helvetica 字体", e);
-                        doc.add_builtin_font(BuiltinFont::Helvetica)?
-                    }
-                }
-            }
-            Err(e) => {
-                println!("加载中文字体失败: {}, 使用内置 Helvetica 字体", e);
-                doc.add_builtin_font(BuiltinFont::Helvetica)?
-            }
-        };
+        // 尝试加载中文字体
+        let font_bytes = Self::load_cjk_font_bytes()?;
+        let cursor = std::io::Cursor::new(font_bytes);
+        let font = doc.add_external_font(cursor)
+            .map_err(|e| anyhow::anyhow!("添加外部字体失败: {}", e))?;
 
         // 跟踪当前页面和图层索引
         let mut current_page = page1;
