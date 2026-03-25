@@ -8,15 +8,11 @@
       <div class="home-content">
         <el-tabs v-model="activeTab">
           <el-tab-pane label="toPdf 任务" name="tasks">
-            <div class="placeholder">
-              <el-empty description="任务模块将在计划 B 中实现" />
-            </div>
+            <TaskList />
           </el-tab-pane>
 
           <el-tab-pane label="聊天" name="chat">
-            <div class="placeholder">
-              <el-empty description="聊天模块将在计划 B 中实现" />
-            </div>
+            <ChatView />
           </el-tab-pane>
         </el-tabs>
       </div>
@@ -28,6 +24,8 @@
 import { ref } from "vue";
 import AppLayout from "@/components/layout/AppLayout.vue";
 import DocumentList from "@/components/documents/DocumentList.vue";
+import TaskList from "@/components/tasks/TaskList.vue";
+import ChatView from "@/components/chat/ChatView.vue";
 
 const activeTab = ref("tasks");
 
@@ -39,12 +37,16 @@ function handleRefresh() {
 <style scoped>
 .home-content {
   height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
-.placeholder {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 400px;
+.home-content :deep(.el-tabs__content) {
+  flex: 1;
+  overflow: hidden;
+}
+
+.home-content :deep(.el-tab-pane) {
+  height: 100%;
 }
 </style>
