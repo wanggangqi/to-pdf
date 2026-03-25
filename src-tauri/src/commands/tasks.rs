@@ -71,7 +71,14 @@ async fn process_task(
     let paragraphs = DocumentProcessor::split_into_paragraphs(&text);
 
     if paragraphs.is_empty() {
-        fail_task_db(&pool, &task_id, "文档无文本内容").await?;
+        let error_msg = "文档无文本内容";
+        fail_task_db(&pool, &task_id, error_msg).await?;
+        app_handle.emit("task-progress", &serde_json::json!({
+            "taskId": task_id,
+            "status": "failed",
+            "progress": 0,
+            "error": error_msg
+        }))?;
         return Ok(());
     }
 
@@ -92,7 +99,20 @@ async fn process_task(
 
     // 翻译
     let translator = Translator::new(provider);
-    let translated_results = translator.translate_paragraphs(&paragraphs, 4).await?;
+    let translated_results = match translator.translate_paragraphs(&paragraphs, 4).await {
+        Ok(results) => results,
+        Err(e) => {
+            let error_msg = e.to_string();
+            fail_task_db(&pool, &task_id, &error_msg).await?;
+            app_handle.emit("task-progress", &serde_json::json!({
+                "taskId": task_id,
+                "status": "failed",
+                "progress": 50,
+                "error": error_msg
+            }))?;
+            return Err(e);
+        }
+    };
 
     // 组装结果
     let translated: Vec<(String, String)> = paragraphs.iter()
@@ -100,18 +120,28 @@ async fn process_task(
         .map(|(cn, en)| (cn.clone(), en.clone()))
         .collect();
 
-    // 更新进度到 95%
-    update_task_status_db(&pool, &task_id, "processing", 95).await?;
+    // 更新进度到 90%
+    update_task_status_db(&pool, &task_id, "processing", 90).await?;
     app_handle.emit("task-progress", &serde_json::json!({
         "taskId": task_id,
         "status": "processing",
-        "progress": 95
+        "progress": 90
     }))?;
 
     // 生成 PDF
     let output_dir = app_handle.path().app_data_dir()?;
     let output_path = output_dir.join(format!("output_{}.pdf", task_id));
-    PdfGenerator::generate_bilingual_pdf(&output_path.to_string_lossy(), &translated)?;
+    if let Err(e) = PdfGenerator::generate_bilingual_pdf(&output_path.to_string_lossy(), &translated) {
+        let error_msg = e.to_string();
+        fail_task_db(&pool, &task_id, &error_msg).await?;
+        app_handle.emit("task-progress", &serde_json::json!({
+            "taskId": task_id,
+            "status": "failed",
+            "progress": 95,
+            "error": error_msg
+        }))?;
+        return Err(e);
+    }
 
     // 完成
     complete_task_db(&pool, &task_id, &output_path.to_string_lossy()).await?;
