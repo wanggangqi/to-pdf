@@ -66,8 +66,8 @@ export const PROVIDER_PRESETS: Record<string, Partial<ProviderConfig>> = {
   bailian: {
     id: "bailian",
     name: "百炼",
-    baseUrl: "https://dashscope.aliyuncs.com/api/v1",
+    baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     model: "qwen-turbo",
-    embeddingModel: "text-embedding-v2",
+    embeddingModel: "text-embedding-v3",
   },
 };

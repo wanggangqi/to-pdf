@@ -46,9 +46,9 @@ impl ProviderConfig {
                 id: "bailian".to_string(),
                 name: "百炼".to_string(),
                 api_key: String::new(),
-                base_url: "https://dashscope.aliyuncs.com/api/v1".to_string(),
+                base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1".to_string(),
                 model: "qwen-turbo".to_string(),
-                embedding_model: "text-embedding-v2".to_string(),
+                embedding_model: "text-embedding-v3".to_string(),
                 is_active: false,
             },
         ]
