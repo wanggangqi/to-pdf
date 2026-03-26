@@ -72,13 +72,13 @@ const form = ref({
 
 const creating = ref(false);
 
-// 可选择的文档：Word 类型且没有被处理中的任务
+// 可选择的文档：排除正在处理中的任务
 const availableDocuments = computed(() => {
   const processingDocIds = new Set(
     tasksStore.processingTasks.map((t) => t.documentId)
   );
   return documentsStore.documents.filter(
-    (doc) => doc.type === "word" && !processingDocIds.has(doc.id)
+    (doc) => !processingDocIds.has(doc.id)
   );
 });
 

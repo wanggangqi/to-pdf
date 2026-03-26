@@ -33,6 +33,7 @@ pub fn run() {
             commands::tasks::list_tasks,
             commands::tasks::create_task,
             commands::tasks::delete_task,
+            commands::tasks::open_task_output,
             // Chat commands
             commands::chat::chat,
             commands::chat::vectorize_document,

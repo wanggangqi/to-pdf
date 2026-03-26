@@ -1,3 +1,3 @@
 pub mod lancedb_store;
 
-pub use lancedb_store::*;
+pub use lancedb_store::VectorStore;
