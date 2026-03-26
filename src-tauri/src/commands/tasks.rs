@@ -1,4 +1,5 @@
 use sqlx::SqlitePool;
+use std::sync::Arc;
 use tauri::{Manager, Emitter};
 use crate::db::*;
 use crate::models::{Task, CreateTask, ProviderConfig};
@@ -44,6 +45,46 @@ pub async fn delete_task(app_handle: tauri::AppHandle, id: String) -> Result<(),
         .execute(&*pool)
         .await
         .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn open_task_output(app_handle: tauri::AppHandle, id: String) -> Result<(), String> {
+    let pool = app_handle.state::<SqlitePool>();
+
+    // 获取任务信息
+    let tasks = list_tasks_db(&*pool).await.map_err(|e| e.to_string())?;
+    let task = tasks.iter().find(|t| t.id == id)
+        .ok_or_else(|| "Task not found".to_string())?;
+
+    let output_path = task.output_path.as_ref()
+        .ok_or_else(|| "Task has no output file".to_string())?;
+
+    // 使用系统默认程序打开文件
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", output_path])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(output_path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(output_path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+
     Ok(())
 }
 
@@ -97,9 +138,40 @@ async fn process_task(
         }
     };
 
-    // 翻译
-    let translator = Translator::new(provider);
-    let translated_results = match translator.translate_paragraphs(&paragraphs, 4).await {
+    // 翻译（带进度）
+    let app_handle_for_progress = app_handle.clone();
+    let task_id_for_progress = task_id.clone();
+    let total_paragraphs = paragraphs.len();
+
+    // 发送翻译开始事件
+    app_handle.emit("task-progress", &serde_json::json!({
+        "taskId": task_id,
+        "status": "translating",
+        "phase": "translation",
+        "progress": 5,
+        "total": total_paragraphs
+    }))?;
+
+    let on_progress = Arc::new(move |completed: usize, total: usize| {
+        // 计算翻译进度（占 5%-85%）
+        let progress = 5 + ((completed as f32 / total as f32) * 80.0) as i32;
+        let _ = app_handle_for_progress.emit("task-progress", &serde_json::json!({
+            "taskId": task_id_for_progress,
+            "status": "translating",
+            "phase": "translation",
+            "progress": progress,
+            "completed": completed,
+            "total": total
+        }));
+    });
+
+    // 使用更高的并发数（10）
+    let translated_results = match Translator::translate_paragraphs_with_progress(
+        provider,
+        &paragraphs,
+        10,
+        Some(on_progress)
+    ).await {
         Ok(results) => results,
         Err(e) => {
             let error_msg = e.to_string();

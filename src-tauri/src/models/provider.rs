@@ -48,7 +48,7 @@ impl ProviderConfig {
                 api_key: String::new(),
                 base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1".to_string(),
                 model: "qwen-turbo".to_string(),
-                embedding_model: "text-embedding-v3".to_string(),
+                embedding_model: "text-embedding-v4".to_string(),
                 is_active: false,
             },
         ]

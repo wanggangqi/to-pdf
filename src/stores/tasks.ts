@@ -7,13 +7,23 @@ interface TaskProgress {
   taskId: string;
   status: string;
   progress: number;
+  phase?: string;
+  completed?: number;
+  total?: number;
+}
+
+interface TaskProgressDetail {
+  progress: number;
+  phase?: string;
+  completed?: number;
+  total?: number;
 }
 
 export const useTasksStore = defineStore("tasks", {
   state: () => ({
     tasks: [] as Task[],
     loading: false,
-    progressMap: new Map<string, number>(),
+    progressMap: new Map<string, TaskProgressDetail>(),
   }),
 
   getters: {
@@ -61,8 +71,8 @@ export const useTasksStore = defineStore("tasks", {
 
     setupListener() {
       listen<TaskProgress>("task-progress", (event) => {
-        const { taskId, status, progress } = event.payload;
-        this.progressMap.set(taskId, progress);
+        const { taskId, status, progress, phase, completed, total } = event.payload;
+        this.progressMap.set(taskId, { progress, phase, completed, total });
 
         if (status === "completed" || status === "failed") {
           // 刷新任务列表
@@ -73,9 +83,9 @@ export const useTasksStore = defineStore("tasks", {
       });
     },
 
-    getProgress(taskId: string): number {
+    getProgress(taskId: string): TaskProgressDetail {
       const task = this.tasks.find((t) => t.id === taskId);
-      return this.progressMap.get(taskId) ?? task?.progress ?? 0;
+      return this.progressMap.get(taskId) ?? { progress: task?.progress ?? 0 };
     },
   },
 });

@@ -68,6 +68,6 @@ export const PROVIDER_PRESETS: Record<string, Partial<ProviderConfig>> = {
     name: "百炼",
     baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     model: "qwen-turbo",
-    embeddingModel: "text-embedding-v3",
+    embeddingModel: "text-embedding-v4",
   },
 };

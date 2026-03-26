@@ -19,9 +19,13 @@ uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 anyhow = "1"
 thiserror = "1"
-# LanceDB 需要系统安装 protoc，将在任务4中启用
-# lancedb = "0.4"
-# arrow = "53"
+# LanceDB 向量存储
+lancedb = "0.4"
+arrow = "51"
+arrow-array = "51"
+arrow-schema = "51"
+polars = { version = "0.44", features = ["lazy"] }
+futures = "0.3"
 pdf-extract = "0.7"
 docx-rs = "0.4"
 printpdf = "0.7"

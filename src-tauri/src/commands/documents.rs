@@ -2,11 +2,12 @@ use sqlx::SqlitePool;
 use tauri::Manager;
 use crate::db::{list_documents_db, create_document_db, delete_document_db};
 use crate::models::{Document, CreateDocument};
+use crate::vector::VectorStore;
 
 #[tauri::command]
 pub async fn list_documents(app_handle: tauri::AppHandle) -> Result<Vec<Document>, String> {
     let pool = app_handle.state::<SqlitePool>();
-    list_documents_db(&pool).await.map_err(|e| e.to_string())
+    list_documents_db(&*pool).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -57,7 +58,7 @@ pub async fn upload_document(
         path: dest_path.to_string_lossy().to_string(),
     };
 
-    create_document_db(&pool, doc).await.map_err(|e| e.to_string())
+    create_document_db(&*pool, doc).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -67,13 +68,29 @@ pub async fn delete_document(
 ) -> Result<(), String> {
     let pool = app_handle.state::<SqlitePool>();
 
-    // Get document path and delete file
+    // Get document info
     let docs = list_documents_db(&pool).await.map_err(|e| e.to_string())?;
     if let Some(doc) = docs.iter().find(|d| d.id == id) {
+        // Delete local file
         if std::path::Path::new(&doc.path).exists() {
             std::fs::remove_file(&doc.path).map_err(|e| e.to_string())?;
         }
+
+        // Delete vectors from LanceDB if document was vectorized
+        if doc.vectorized {
+            let app_dir = app_handle.path().app_data_dir().map_err(|e| e.to_string())?;
+            let db_path = app_dir.join("vectors.db");
+            let vector_store = VectorStore::new(&db_path.to_string_lossy());
+
+            if let Err(e) = vector_store.delete(&id).await {
+                eprintln!("[WARN] Failed to delete vectors for document {}: {}", id, e);
+                // Don't fail the whole operation if vector deletion fails
+            } else {
+                println!("[DEBUG] Deleted vectors for document {}", id);
+            }
+        }
     }
 
-    delete_document_db(&pool, &id).await.map_err(|e| e.to_string())
+    // Delete from SQLite
+    delete_document_db(&*pool, &id).await.map_err(|e| e.to_string())
 }

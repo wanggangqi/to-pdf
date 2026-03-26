@@ -33,21 +33,45 @@
               <span>{{ formatSize(doc.size) }}</span>
               <el-tag
                 size="small"
-                :type="doc.vectorized ? 'success' : 'info'"
+                :type="getVectorizedType(doc)"
               >
-                {{ doc.vectorized ? "已向量化" : "未向量化" }}
+                {{ getVectorizedText(doc) }}
               </el-tag>
             </div>
           </div>
 
-          <el-button
-            class="delete-btn"
-            type="danger"
-            link
-            @click.stop="handleDelete(doc.id)"
-          >
-            <el-icon><Delete /></el-icon>
-          </el-button>
+          <div class="doc-actions">
+            <template v-if="!doc.vectorized && !isVectorizing(doc.id)">
+              <el-button
+                type="warning"
+                link
+                size="small"
+                @click.stop="handleVectorize(doc.id)"
+              >
+                向量化
+              </el-button>
+            </template>
+            <template v-else-if="isVectorizing(doc.id)">
+              <div class="vectorizing-progress">
+                <el-progress
+                  type="circle"
+                  :width="24"
+                  :stroke-width="3"
+                  :percentage="getProgressPercent(doc.id)"
+                  :show-text="false"
+                />
+                <span class="progress-text">{{ getProgressText(doc.id) }}</span>
+              </div>
+            </template>
+            <el-button
+              class="delete-btn"
+              type="danger"
+              link
+              @click.stop="handleDelete(doc.id)"
+            >
+              <el-icon><Delete /></el-icon>
+            </el-button>
+          </div>
         </div>
       </div>
     </el-scrollbar>
@@ -56,7 +80,7 @@
 
 <script setup lang="ts">
 import { onMounted } from "vue";
-import { ElMessageBox } from "element-plus";
+import { ElMessageBox, ElMessage } from "element-plus";
 import { Document, Tickets, Delete, Loading } from "@element-plus/icons-vue";
 import { useDocumentsStore } from "@/stores/documents";
 import UploadButton from "./UploadButton.vue";
@@ -77,6 +101,41 @@ function isSelected(id: string) {
 
 function toggleSelect(id: string) {
   documentsStore.toggleSelection(id);
+}
+
+function isVectorizing(id: string) {
+  return documentsStore.vectorizingIds.includes(id);
+}
+
+function getProgressPercent(id: string): number {
+  const progress = documentsStore.getVectorizeProgress(id);
+  if (!progress || progress.totalBatches === 0) return 0;
+  return Math.round((progress.batch / progress.totalBatches) * 100);
+}
+
+function getProgressText(id: string): string {
+  const progress = documentsStore.getVectorizeProgress(id);
+  if (!progress || progress.totalBatches === 0) return "准备中...";
+  return `${progress.batch}/${progress.totalBatches}`;
+}
+
+function getVectorizedType(doc: { vectorized: boolean }) {
+  if (doc.vectorized) return "success";
+  return "info";
+}
+
+function getVectorizedText(doc: { vectorized: boolean }) {
+  if (doc.vectorized) return "已向量化";
+  return "未向量化";
+}
+
+async function handleVectorize(id: string) {
+  try {
+    await documentsStore.vectorizeDocument(id);
+    ElMessage.success("向量化完成");
+  } catch (error: any) {
+    ElMessage.error(`向量化失败: ${error}`);
+  }
 }
 
 async function handleDelete(id: string) {
@@ -181,5 +240,23 @@ function formatSize(bytes: number): string {
 
 .document-item:hover .delete-btn {
   opacity: 1;
+}
+
+.doc-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vectorizing-progress {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.progress-text {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  white-space: nowrap;
 }
 </style>

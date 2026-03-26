@@ -12,11 +12,18 @@
 
     <div class="task-progress" v-if="task.status === 'processing'">
       <el-progress
-        :percentage="progress"
+        :percentage="progressDetail.progress"
         :stroke-width="6"
         :show-text="false"
       />
-      <span class="progress-text">{{ progress }}%</span>
+      <span class="progress-text">
+        <template v-if="progressDetail.phase === 'translation' && progressDetail.completed && progressDetail.total">
+          翻译 {{ progressDetail.completed }}/{{ progressDetail.total }}
+        </template>
+        <template v-else>
+          {{ progressDetail.progress }}%
+        </template>
+      </span>
     </div>
 
     <div class="task-meta">
@@ -133,11 +140,11 @@ const tagType = computed(() => {
   }
 });
 
-const progress = computed(() => {
+const progressDetail = computed(() => {
   if (props.task.status === "processing") {
     return tasksStore.getProgress(props.task.id);
   }
-  return props.task.progress;
+  return { progress: props.task.progress };
 });
 
 const documentName = computed(() => {
@@ -173,7 +180,8 @@ async function handleDelete() {
 onMounted(() => {
   if (props.task.status === "processing") {
     progressInterval = setInterval(() => {
-      liveProgress.value = tasksStore.getProgress(props.task.id);
+      // 强制响应式更新
+      liveProgress.value = tasksStore.getProgress(props.task.id).progress;
     }, 500);
   }
 });
