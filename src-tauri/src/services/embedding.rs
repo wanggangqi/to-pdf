@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 use crate::models::ProviderConfig;
 
 #[derive(Debug, Serialize)]
@@ -43,7 +44,9 @@ pub async fn get_embeddings_with_callback(
         return Ok(Vec::new());
     }
 
-    let client = Client::new();
+    let client = Client::builder()
+        .timeout(Duration::from_secs(60))  // 60秒超时
+        .build()?;
     let url = format!("{}/embeddings", provider.base_url);
 
     let total_batches = (texts.len() + EMBEDDING_BATCH_SIZE - 1) / EMBEDDING_BATCH_SIZE;
@@ -83,6 +86,8 @@ pub async fn get_embeddings_with_callback(
             dimension,
         };
 
+        println!("[DEBUG] Sending embedding request to {}", url);
+
         let response = client
             .post(&url)
             .header("Authorization", format!("Bearer {}", provider.api_key))
@@ -90,6 +95,8 @@ pub async fn get_embeddings_with_callback(
             .json(&request)
             .send()
             .await?;
+
+        println!("[DEBUG] Embedding response status: {}", response.status());
 
         if !response.status().is_success() {
             let error_text = response.text().await?;
