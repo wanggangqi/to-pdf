@@ -40,6 +40,9 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Setup npm path
+        run: echo "${{ github.workspace }}\node_modules\.bin" >> $env:GITHUB_PATH
+
       - name: Build frontend
         run: npm run build
 
