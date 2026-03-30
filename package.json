@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm exec vue-tsc -- --noEmit && npm exec vite -- build",
+    "build": "node_modules/.bin/vue-tsc --noEmit && node_modules/.bin/vite build",
     "preview": "vite preview",
     "tauri": "tauri"
   },
