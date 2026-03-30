@@ -8,14 +8,17 @@
 <script setup lang="ts">
 import { Plus } from "@element-plus/icons-vue";
 import { useDocumentsStore } from "@/stores/documents";
+import { useApiKeyCheck } from "@/composables/useApiKeyCheck";
 
 const emit = defineEmits<{
   uploaded: [];
 }>();
 
 const documentsStore = useDocumentsStore();
+const { checkApiKey } = useApiKeyCheck();
 
 async function handleUpload() {
+  if (!await checkApiKey()) return;
   await documentsStore.uploadDocument();
   emit("uploaded");
 }

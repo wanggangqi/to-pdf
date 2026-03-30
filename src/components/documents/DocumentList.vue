@@ -83,6 +83,7 @@ import { onMounted } from "vue";
 import { ElMessageBox, ElMessage } from "element-plus";
 import { Document, Tickets, Delete, Loading } from "@element-plus/icons-vue";
 import { useDocumentsStore } from "@/stores/documents";
+import { useApiKeyCheck } from "@/composables/useApiKeyCheck";
 import UploadButton from "./UploadButton.vue";
 
 const emit = defineEmits<{
@@ -90,6 +91,7 @@ const emit = defineEmits<{
 }>();
 
 const documentsStore = useDocumentsStore();
+const { checkApiKey } = useApiKeyCheck();
 
 onMounted(() => {
   documentsStore.loadDocuments();
@@ -130,6 +132,7 @@ function getVectorizedText(doc: { vectorized: boolean }) {
 }
 
 async function handleVectorize(id: string) {
+  if (!await checkApiKey()) return;
   try {
     await documentsStore.vectorizeDocument(id);
     ElMessage.success("向量化完成");

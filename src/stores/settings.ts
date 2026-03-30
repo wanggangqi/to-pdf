@@ -6,9 +6,14 @@ import type { ProviderConfig } from "@/types";
 export const useSettingsStore = defineStore("settings", () => {
   const providers = ref<ProviderConfig[]>([]);
   const loading = ref(false);
+  const initialized = ref(false);
 
   const activeProvider = computed(
     () => providers.value.find((p) => p.isActive) || null
+  );
+
+  const hasActiveProvider = computed(
+    () => activeProvider.value !== null && activeProvider.value.apiKey.length > 0
   );
 
   async function loadProviders() {
@@ -16,6 +21,7 @@ export const useSettingsStore = defineStore("settings", () => {
     try {
       const result = await invoke<ProviderConfig[]>("get_providers");
       providers.value = result;
+      initialized.value = true;
     } catch (error) {
       console.error("Failed to load providers:", error);
       providers.value = [];
@@ -47,7 +53,9 @@ export const useSettingsStore = defineStore("settings", () => {
   return {
     providers,
     loading,
+    initialized,
     activeProvider,
+    hasActiveProvider,
     loadProviders,
     saveProvider,
     testProvider,

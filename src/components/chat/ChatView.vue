@@ -41,11 +41,13 @@
 import { ref, computed, onMounted } from "vue";
 import { useChatStore } from "@/stores/chat";
 import { useDocumentsStore } from "@/stores/documents";
+import { useApiKeyCheck } from "@/composables/useApiKeyCheck";
 import MessageList from "./MessageList.vue";
 import ChatInput from "./ChatInput.vue";
 
 const chatStore = useChatStore();
 const documentsStore = useDocumentsStore();
+const { checkApiKey } = useApiKeyCheck();
 
 const selectedDocIds = ref<string[]>([]);
 
@@ -68,7 +70,9 @@ async function handleSend(content: string) {
   if (selectedDocIds.value.length === 0) {
     return;
   }
-  await chatStore.sendMessage(content);
+  if (await checkApiKey()) {
+    await chatStore.sendMessage(content);
+  }
 }
 
 function handleClear() {

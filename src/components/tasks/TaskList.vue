@@ -2,7 +2,7 @@
   <div class="task-list">
     <div class="list-header">
       <span>任务列表</span>
-      <el-button type="primary" size="small" @click="showCreateDialog = true">
+      <el-button type="primary" size="small" @click="handleCreateClick">
         <el-icon><Plus /></el-icon>
         新建
       </el-button>
@@ -38,11 +38,13 @@ import { ref, onMounted } from "vue";
 import { Plus, Loading } from "@element-plus/icons-vue";
 import { useTasksStore } from "@/stores/tasks";
 import { useDocumentsStore } from "@/stores/documents";
+import { useApiKeyCheck } from "@/composables/useApiKeyCheck";
 import TaskItem from "./TaskItem.vue";
 import CreateTaskDialog from "./CreateTaskDialog.vue";
 
 const tasksStore = useTasksStore();
 const documentsStore = useDocumentsStore();
+const { checkApiKey } = useApiKeyCheck();
 
 const showCreateDialog = ref(false);
 
@@ -51,6 +53,12 @@ onMounted(() => {
   documentsStore.loadDocuments();
   tasksStore.setupListener();
 });
+
+async function handleCreateClick() {
+  if (await checkApiKey()) {
+    showCreateDialog.value = true;
+  }
+}
 
 function handleTaskCreated() {
   tasksStore.loadTasks();

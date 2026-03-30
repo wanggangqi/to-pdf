@@ -11,6 +11,15 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .target(tauri_plugin_log::Target::Folder {
+                    path: std::path::PathBuf::from("logs"),
+                    file_name: Some("app.log".into()),
+                })
+                .level(log::LevelFilter::Info)
+                .build(),
+        )
         .setup(|app| {
             let app_handle = app.handle();
             tauri::async_runtime::block_on(async {
