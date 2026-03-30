@@ -13,8 +13,7 @@ pub fn run() {
         .plugin(
             tauri_plugin_log::Builder::new()
                 .targets([
-                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Folder {
-                        path: std::path::PathBuf::from("logs"),
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
                         file_name: Some("app.log".into()),
                     }),
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
@@ -24,9 +23,18 @@ pub fn run() {
         )
         .setup(|app| {
             let app_handle = app.handle();
+            log::info!("DocTranslate app starting...");
+
+            if let Ok(app_dir) = app_handle.path().app_data_dir() {
+                log::info!("App data dir: {:?}", app_dir);
+            }
+
             tauri::async_runtime::block_on(async {
                 if let Err(e) = db::init_db(&app_handle).await {
+                    log::error!("Failed to initialize database: {}", e);
                     eprintln!("Failed to initialize database: {}", e);
+                } else {
+                    log::info!("Database initialized successfully");
                 }
             });
             Ok(())
