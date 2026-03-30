@@ -30,6 +30,13 @@ jobs:
         with:
           workspaces: './src-tauri -> target'
 
+      - name: Install protoc
+        run: |
+          $protocUrl = "https://github.com/protocolbuffers/protobuf/releases/download/v25.1/protoc-25.1-win64.zip"
+          Invoke-WebRequest -Uri $protocUrl -OutFile protoc.zip
+          Expand-Archive -Path protoc.zip -DestinationPath C:\protoc
+          echo "C:\protoc\bin" >> $env:GITHUB_PATH
+
       - name: Install frontend dependencies
         run: npm ci
 
